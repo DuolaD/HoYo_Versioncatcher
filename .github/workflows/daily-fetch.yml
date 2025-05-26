@@ -1,0 +1,104 @@
+name: Daily API Fetch
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Everyday UTC 3:00
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-and-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up environment
+      run: |
+        mkdir -p logs
+        > logs/failures.txt
+        echo "DATE=$(TZ=Asia/Shanghai date '+%Y/%m/%d %H:%M:%S')" >> $GITHUB_ENV
+        echo "NOW=$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
+
+    - name: Fetch API data and update files
+      run: |
+        declare -A urls=(
+          ["GI/CN.json"]="https://hyp-api.mihoyo.com/hyp/hyp-connect/api/getGamePackages?game_ids%5B%5D=1Z8W5NHUQb&launcher_id=jGHBHlcOq1"
+          ["GI/BiliBili.json"]="https://hyp-api.mihoyo.com/hyp/hyp-connect/api/getGamePackages?game_ids%5B%5D=T2S0Gz4Dr2&launcher_id=umfgRO5gh5"
+          ["GI/OS.json"]="https://sg-hyp-api.hoyoverse.com/hyp/hyp-connect/api/getGamePackages?game_ids%5B%5D=gopR6Cufr3&launcher_id=VYTpXlbWo8"
+          ["ZZZ/CN.json"]="https://hyp-api.mihoyo.com/hyp/hyp-connect/api/getGamePackages?game_ids%5B%5D=x6znKlJ0xK&launcher_id=jGHBHlcOq1"
+          ["ZZZ/OS.json"]="https://sg-hyp-api.hoyoverse.com/hyp/hyp-connect/api/getGamePackages?game_ids%5B%5D=U5hbdsT9W7&launcher_id=VYTpXlbWo8"
+          ["BH3/CN.json"]="https://hyp-api.mihoyo.com/hyp/hyp-connect/api/getGamePackages?game_ids[]=osvnlOc0S8&launcher_id=jGHBHlcOq1"
+          ["BH3/OS.json"]="https://sg-hyp-api.hoyoverse.com/hyp/hyp-connect/api/getGamePackages?game_ids[]=wkE5P5WsIf&game_ids[]=bxPTXSET5t&game_ids[]=5TIVvvcwtM&game_ids[]=uxB4MC7nzC&game_ids[]=g0mMIvshDb&launcher_id=VYTpXlbWo8"
+          ["HSR/CN.json"]="https://hyp-api.mihoyo.com/hyp/hyp-connect/api/getGamePackages?game_ids%5B%5D=64kMb5iAWu&launcher_id=jGHBHlcOq1"
+          ["HSR/BiliBili.json"]="https://api-launcher-static.mihoyo.com/hkrpg_cn/mdk/launcher/api/resource?channel_id=14&key=fSPJNRwFHRipkprW&launcher_id=28&sub_channel_id=0"
+          ["HSR/OS.json"]="https://sg-hyp-api.hoyoverse.com/hyp/hyp-connect/api/getGamePackages?game_ids%5B%5D=4ziysqXOQ8&launcher_id=VYTpXlbWo8"
+          ["summarizing_cn.json"]="https://hyp-api.mihoyo.com/hyp/hyp-connect/api/getGamePackages?launcher_id=jGHBHlcOq1"
+          ["summarizing_os.json"]="https://sg-hyp-api.hoyoverse.com/hyp/hyp-connect/api/getGamePackages?launcher_id=VYTpXlbWo8"
+        )
+
+        updated_files=()
+        failed_files=()
+
+        for file in "${!urls[@]}"; do
+          url="${urls[$file]}"
+          dir=$(dirname "$file")
+          [ "$dir" != "." ] && mkdir -p "$dir"
+
+          tmp_raw="tmp_raw.json"
+          if ! curl -fsSL "$url" -o "$tmp_raw"; then
+            echo "$file | $url" >> logs/failures.txt
+            failed_files+=("$file")
+            continue
+          fi
+
+          new_json=$(cat "$tmp_raw")
+          new_with_comment="// updated at $NOW\n// fetched automatically by GitHub Actions\n\n$new_json"
+
+          # remove comment lines from existing file
+          old_json=""
+          [ -f "$file" ] && old_json=$(sed '/^\s*\/\//d' "$file")
+
+          if [ "$old_json" != "$new_json" ]; then
+            echo -e "$new_with_comment" > "$file"
+            updated_files+=("$file")
+          else
+            # even if no data change, update time/comment and write file
+            echo -e "$new_with_comment" > "$file"
+          fi
+
+          rm -f "$tmp_raw"
+        done
+
+        echo "UPDATED_FILES=${updated_files[*]}" >> $GITHUB_ENV
+        echo "FAILED_FILES=${failed_files[*]}" >> $GITHUB_ENV
+
+    - name: Commit and push changes
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        git add .
+
+        # Construct commit message
+        COMMIT_MSG="🤖 Daily API data update at $DATE"
+
+        if [ -n "$UPDATED_FILES" ]; then
+          COMMIT_MSG+="  || Update: ${UPDATED_FILES// /, }"
+        else
+          COMMIT_MSG+="  || No any API data update."
+        fi
+
+        if [ -n "$FAILED_FILES" ]; then
+          COMMIT_MSG+="  || Failed: ${FAILED_FILES// /, }"
+        fi
+
+        if git diff --cached --quiet; then
+          echo "No changes to commit."
+        else
+          git commit -m "$COMMIT_MSG"
+          git push
+        fi
