@@ -56,17 +56,23 @@ jobs:
           fi
 
           new_json=$(cat "$tmp_raw")
+          new_cleaned=$(echo "$new_json" | jq -S . 2>/dev/null)
+
+          if [ -z "$new_cleaned" ]; then
+            echo "$file | Invalid JSON from API" >> logs/failures.txt
+            failed_files+=("$file")
+            continue
+          fi
+
+          old_cleaned=""
+          [ -f "$file" ] && old_cleaned=$(sed '/^\s*\/\//d' "$file" | jq -S . 2>/dev/null || echo "")
+
           new_with_comment="// updated at $NOW\n// fetched automatically by GitHub Actions\n\n$new_json"
 
-          # remove comment lines from existing file
-          old_json=""
-          [ -f "$file" ] && old_json=$(sed '/^\s*\/\//d' "$file")
-
-          if [ "$old_json" != "$new_json" ]; then
+          if [ "$old_cleaned" != "$new_cleaned" ]; then
             echo -e "$new_with_comment" > "$file"
             updated_files+=("$file")
           else
-            # even if no data change, update time/comment and write file
             echo -e "$new_with_comment" > "$file"
           fi
 
