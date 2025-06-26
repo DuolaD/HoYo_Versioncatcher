@@ -1,4 +1,4 @@
-// updated at 2025-06-25 11:45:59
+// updated at 2025-06-26 11:43:51
 // fetched automatically by GitHub Actions
 
 {"retcode":0,"message":"OK","data":{"game_packages":[{"game":{"id":"osvnlOc0S8","biz":"bh3_cn"},"main":{"major":{"version":"8.3.0","game_pkgs":[{"url":"https://autopatchcn.bh3.com/ptpublic/rel/20250523115648_9RU48di9UxAQIixO/PC/BH3_v8.3.0_f2e1345adb47.7z","md5":"67bab0aa1f618baddfb6713ade7b053e","size":"22491072482","decompressed_size":"44992630724"}],"audio_pkgs":[],"res_list_url":"https://autopatchcn.bh3.com/ptpublic/rel/20250523115648_9RU48di9UxAQIixO/PC/extract"},"patches":[]},"pre_download":{"major":null,"patches":[]}}]}}
